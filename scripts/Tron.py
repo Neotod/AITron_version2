@@ -52,6 +52,7 @@ class Tron:
                 range_y1 -= (range_y2 - (len(self.board)-2))
                 range_y2 = len(self.board)-2
 
+            # range_y1, range_y2 = 1, len(self.board)-2
 
             range_x1 = wall_x-10
             range_x2 = wall_x+10
@@ -70,8 +71,6 @@ class Tron:
                     if self.board[i][j] != ECell.AreaWall:
                         if (i, j) != position:
                             self.walls_neighbors[(wall_y, wall_x)].append((i, j))
-    
-
 
     def identify_walls(self, check_awalls: bool):
         if self.agent_name == 'Blue':
@@ -196,16 +195,14 @@ class Tron:
                     x_steps = (-1, 0, 0, 1)
                     opponent_walls = my_walls = empty_walls = area_walls = 0
                     
-                    forbiden_walls = [(1, 1), (1, len(self.board[0])-2), (len(self.board)-2, 1), (len(self.board)-2, len(self.board[0])-2)]
-                    if (wall_y, wall_x) not in forbiden_walls:
-                        for i in range(4):
-                            y = wall_y + y_steps[i]
-                            x = wall_x + x_steps[i]
-                            if self.board[y][x] == ECell.AreaWall:
-                                area_walls += 1
-                    else:
-                        area_walls = 0
+                    for i in range(4):
+                        y = wall_y + y_steps[i]
+                        x = wall_x + x_steps[i]
+                        if self.board[y][x] == ECell.AreaWall:
+                            area_walls += 1
 
+                    if area_walls == 2:
+                        area_walls = 1
 
                     if area_walls != 0:
                         center_y, center_x = len(self.board) // 2, len(self.board[0]) // 2 
@@ -238,6 +235,7 @@ class Tron:
                         if self.board[wall_y][wall_x] == opponent_wall:
                             ratios[0] += 1.5
                             ratios[2] -= 1
+                            ratios[3] += 25  
 
                     else:
                         ratios = [20, 25, -1, -40]
@@ -318,24 +316,97 @@ class Tron:
             return 'area'
         
     
-    # def find_best_wall(self, walls):
-    #     if self.agent_state == 'normal':
-    #         # filter 1
-    #         walls_weights = [self.get_wall_weight()]
+    def find_best_wall(self, walls):
+        if self.agent_state == 'normal':
+            # filter 1
+            walls_weights = [self.get_wall_weight(wall_pos) for wall_pos in walls]
 
+            min_weight = min(walls_weights)
+            
+            filter1_qualifieds = []
+            for i in range(len(walls)):
+                weight = walls_weights[i]
+                diff = abs(weight - min_weight)
+
+                if 0 <= diff and diff <= 10:
+                    wall_pos = walls[i]
+                    filter1_qualifieds.append(wall_pos)
+
+            print('filter1: ', filter1_qualifieds)
+
+            
+            walls_distance = []
+            area_walls_pos = self.walls['area']
+            for wall_pos in filter1_qualifieds:
+                distances = []
+                for awall_pos in area_walls_pos:
+                    distance_y = abs(wall_pos[0] - awall_pos[0])
+                    distance_x = abs(wall_pos[1] - awall_pos[1])
+
+                    distance = int(sqrt(distance_y**2 + distance_x**2)*1000)
+                    distances.append(distance)
+                
+                
+                min_distance = min(distances)
+                index = distances.index(min_distance)
+                closest_awall_pos = list(area_walls_pos.keys())[index]
+
+                distance_y = abs(wall_pos[0] - closest_awall_pos[0])
+                distance_x = abs(wall_pos[1] - closest_awall_pos[1])
+
+                distance = sqrt(distance_y**2 + distance_x**2)
+                walls_distance.append(distance)
+
+            min_wall_distance = min(walls_distance)
+            wall_index = walls_distance.index(min_wall_distance)
+
+            print('\n\n')
+
+            return filter1_qualifieds[wall_index]
+        
+        elif self.agent_state == 'attack':
+            walls = list(walls.keys())
+            walls_weights = [self.get_wall_weight(wall_pos) for wall_pos in walls]
+            min_weight = min(walls_weights)
+            
+            filter1_qualifieds = []
+            for i in range(len(walls)):
+                weight = walls_weights[i]
+                diff = abs(weight - min_weight)
+
+                if 0 <= diff and diff <= 100:
+                    wall_pos = walls[i]
+                    filter1_qualifieds.append(wall_pos)
+
+            print('filter1: ', filter1_qualifieds)
+            if len(filter1_qualifieds) == 1:
+                return filter1_qualifieds[0]
+
+            # filter 2
+            agent_pos = (self.agent.position.y, self.agent.position.x)
+
+            distances = []
+            for wall_pos in filter1_qualifieds:
+
+                distance_y, distance_x = abs(wall_pos[0] - agent_pos[0]), abs(wall_pos[1] - agent_pos[1])
+                distance = sqrt(distance_y**2 + distance_x**2)
+                distances.append(distance)
+
+            min_distance, index = 100000, 0
+            for i in range(len(filter1_qualifieds)):
+                distance = distances[i]
+                if distance < min_distance:
+                    index = i
+                    min_distance = distance
+
+            return filter1_qualifieds[index]
 
     def find_target(self):
         if self.agent_state == 'normal':
             agent_y, agent_x = self.agent.position.y, self.agent.position.x
             curr_wall_neighbors = self.walls_neighbors[(agent_y, agent_x)]
 
-            neighbors_weights = [self.get_wall_weight(position) for position in curr_wall_neighbors]
-
-
-            min_weight = min(neighbors_weights)
-            index = neighbors_weights.index(min_weight)
-            wall_pos = self.walls_neighbors[(agent_y, agent_x)][index]
-
+            wall_pos = self.find_best_wall(curr_wall_neighbors)
 
         elif self.agent_state == 'attack':
             if self.is_opponent_score_low:
@@ -344,12 +415,8 @@ class Tron:
 
             elif self.is_opponent_near == False:
                 opponent_walls = self.walls['opponent']
-                walls_weight = [self.get_wall_weight(position) for position in list(opponent_walls.keys())]
 
-                min_weight = min(walls_weight)
-                index = walls_weight.index(min_weight)
-                wall_pos = list(opponent_walls.keys())[index]
-
+                wall_pos = self.find_best_wall(opponent_walls)
 
         elif self.agent_state == 'defence':
             opponent_y, opponent_x = self.opponent.position.y, self.opponent.position.x
@@ -388,8 +455,6 @@ class Tron:
                 pos = qual_neighbor_walls[i]
                 weight = neighbors_weights[i]
                 show_walls[pos] = weight
-
-            print('defence_qualified_walls: ', show_walls)
 
 
             min_weight = min(neighbors_weights)
@@ -606,7 +671,7 @@ class Tron:
             return False
             
         
-    def say_welcome(self):
+    def show_banner(self):
         welcome_banner = [
             ['\n'],
             ['''
@@ -644,9 +709,7 @@ class Tron:
         return next_dir
 
 
-    def show_walls_info(self):
-        print(f'state: {self.agent_state} || target_weight: {self.get_wall_weight(self.target_pos)}')
-        
+    def show_walls_info(self):        
         print('{:<5}'.format('*'), end='')
         for i in range(len(self.board[0])):
             print('{:<5}'.format(i), end='')

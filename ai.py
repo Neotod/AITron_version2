@@ -24,6 +24,7 @@ class AI(RealtimeAI):
     def initialize(self):
         self.tron = Tron()
         self.tron.initalize()
+        self.tron.show_banner()
 
         agents = self.world.agents
         names = [self.my_side, self.other_side]
@@ -40,8 +41,6 @@ class AI(RealtimeAI):
         agent_pos = (agents[self.my_side].position.y, agents[self.my_side].position.x)
         self.tron.find_best_route(agent_pos, self.tron.target_pos)
 
-        t2 = perf_counter()
-
     def decide(self):
         agents = self.world.agents
         names = [self.my_side, self.other_side]
@@ -56,16 +55,17 @@ class AI(RealtimeAI):
 
         if self.tron.is_target_reached() or self.tron.is_target_cycles_exceeded():
             self.tron.find_target()
-            
 
         agent_pos = (agents[self.my_side].position.y, agents[self.my_side].position.x)
         self.tron.find_best_route(agent_pos, self.tron.target_pos)
 
         print(f'current_cycle: {self.current_cycle}')
-        self.tron.show_walls_info()
+        print(f'state: {self.tron.agent_state} || target: {self.tron.target_pos} weight: {self.tron.get_wall_weight(self.tron.target_pos)}')
+        # self.tron.show_walls_info()
 
         if self.tron.is_wallbreaker_needed():
-            self.send_command(ActivateWallBreaker())
+            if agents[self.my_side].wall_breaker_cooldown == 0:
+                self.send_command(ActivateWallBreaker())
 
         next_dir = self.tron.next_dir()
         self.send_command(ChangeDirection(next_dir))
