@@ -22,46 +22,73 @@ class AI(RealtimeAI):
 
 
     def initialize(self):
+        t1 = perf_counter()
+
         self.tron = Tron()
         self.tron.initalize()
-        self.tron.show_banner()
+        # self.tron.show_banner()
 
         agents = self.world.agents
         names = [self.my_side, self.other_side]
         scores = self.world.scores
         board = self.world.board
-        self.tron.set_requirements(agents, names, scores, board)
+        curr_cycle = self.current_cycle
+        self.tron.set_requirements(agents, names, scores, board, curr_cycle)
     
-        # self.tron.say_welcome()
         self.tron.identify_walls(True)
         self.tron.find_walls_neighbors()
-        self.tron.calc_wall_weight()
+        self.tron.find_closest_area_wall()
+        self.tron.find_walls_info()
+        
         self.tron.find_target()
 
-        agent_pos = (agents[self.my_side].position.y, agents[self.my_side].position.x)
-        self.tron.find_best_route(agent_pos, self.tron.target_pos)
+        t2 = perf_counter()
+
+        print(f'initialize time: {t2-t1}')
 
     def decide(self):
+
         agents = self.world.agents
         names = [self.my_side, self.other_side]
         scores = self.world.scores
         board = self.world.board
-        self.tron.set_requirements(agents, names, scores, board)
+        curr_cycle = self.current_cycle
+        self.tron.set_requirements(agents, names, scores, board, curr_cycle)
 
+        t1 = perf_counter()
         self.tron.identify_walls(False)
-        self.tron.calc_wall_weight()
-        self.tron.update_state()
-        self.tron.calc_wall_weight()
+        t2 = perf_counter()
+        print(f'identify walls: {t2-t1}')
 
+        t1 = perf_counter()
+        self.tron.find_walls_info()
+        t2 = perf_counter()
+        print(f'find_walls_info: {t2-t1}')
+
+        t1 = perf_counter()
+        self.tron.update_state()
+        t2 = perf_counter()
+        print(f'update_state: {t2-t1}')
+
+        t1 = perf_counter()
         if self.tron.is_target_reached() or self.tron.is_target_cycles_exceeded():
             self.tron.find_target()
+        t2 = perf_counter()
+        print(f'find_target: {t2-t1}')
 
-        agent_pos = (agents[self.my_side].position.y, agents[self.my_side].position.x)
-        self.tron.find_best_route(agent_pos, self.tron.target_pos)
+        t1 = perf_counter()
+        self.tron.find_next_route()
+        t2 = perf_counter()
+        print(f'find_next_route {t2-t1}')
 
+        t1 = perf_counter()
         print(f'current_cycle: {self.current_cycle}')
-        print(f'state: {self.tron.agent_state} || target: {self.tron.target_pos} weight: {self.tron.get_wall_weight(self.tron.target_pos)}')
-        # self.tron.show_walls_info()
+        print(f'current_position: {(agents[self.my_side].position.y, agents[self.my_side].position.x)}')
+        print(f'target: {self.tron.target_pos} weight: {self.tron.get_wall_weight(self.tron.target_pos)}\n\n')
+        self.tron.show_walls_info()
+        t2 = perf_counter()
+
+        print(f'showing things {t2-t1}')
 
         if self.tron.is_wallbreaker_needed():
             if agents[self.my_side].wall_breaker_cooldown == 0:
