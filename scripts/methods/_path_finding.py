@@ -19,6 +19,9 @@ def get_costs(self, start_pos, dest_pos):
                     position = (i, j)
                     if position in positions:
                         costs[(i, j)] = self.get_wall_weight(position)
+            else:
+                if self.agent_state == 'suicide':
+                    costs[(i, j)] = 0
 
 
         for wall_pos in costs:
@@ -37,19 +40,32 @@ def get_costs(self, start_pos, dest_pos):
                 if self.board[y][x] == o_wall or self.board[y][x] == m_wall:
                     wall_cost += (wall_cost * 40/100)
                     costs[wall_pos] = int(wall_cost)
+            
+            if self.agent_state == 'attack' and self.agent_attack_state == 'onway':
+                if self.board[y][x] == o_wall:
+                    wall_cost += (wall_cost * 20/100)
+                    costs[wall_pos] = int(wall_cost)
+            
+            if self.agent_state == 'normal' or self.agent_state == 'brutal':
+                if self.board[y][x] == ECell.Empty:
+                    wall_cost -= (wall_cost * 20/100)
+                    costs[wall_pos] = int(wall_cost)
+
+                if self.agent.wall_breaker_rem_time != 0:
+                    if self.board[y][x] == o_wall:
+                        wall_cost -= (wall_cost * 35/100)
+                        costs[wall_pos] = int(wall_cost)
+
+            if self.agent_state == 'defence':
+                if self.agent.wall_breaker_rem_time != 0:
+                    if self.board[y][x] == o_wall:
+                        wall_cost -= (wall_cost * 50/100)
+                        costs[wall_pos] = int(wall_cost)
 
             if self.board[y][x] == m_wall:
                 wall_cost += (wall_cost * 60/100)
                 costs[wall_pos] = int(wall_cost)
-
-            # if self.agent_state == 'attack' or self.agent_state == 'brutal':
-            #     if self.board[y][x] == o_wall:
-            #         if self.agent.wall_breaker_rem_time > 2:
-            #             wall_cost -= (wall_cost * 30/100)
-            #         else:
-            #             wall_cost -= (wall_cost * 10/100)
-            #         costs[wall_pos] = int(wall_cost)
-
+                
             if wall_cost < 0:
                 print(f'there is a negative cost here: {wall_pos} | {wall_cost}')
 
@@ -71,6 +87,10 @@ def get_heuristics(self, start_pos, dest_pos):
             if self.board[i][j] != ECell.AreaWall:
                 distance = abs(i - dest_pos[0]) + abs(j - dest_pos[1])
                 heuristics[(i, j)] = distance*10
+
+            else:
+                if self.agent_state == 'suicide':
+                    heuristics[(i, j)] = 0
 
     return heuristics
 
@@ -95,7 +115,7 @@ def find_best_route(self, start_pos, dest_pos):
     
     cost_so_far = 0
     while True:
-        next_node, min_f = (0, 0), 10000000
+        next_node, min_f = (0, 0), 10000000000000
         for node, value in open_vertices.items():
             f = value[0]
             if f < min_f:
@@ -107,9 +127,15 @@ def find_best_route(self, start_pos, dest_pos):
                 if node_h < min_node_h:
                     next_node = node
                     min_f = f
-
+        
         current_node = next_node
-        came_from = open_vertices[current_node][1]
+        try:
+            came_from = open_vertices[current_node][1]
+        except Exception as e:
+            print(f'start {start_pos}, end: {dest_pos}')
+            print(f'open vertices: {open_vertices}')
+            print('Exception occured in  FIND_BEST_ROUTE')
+
                 
         cost_so_far = 0
         for node in came_from:
@@ -127,7 +153,7 @@ def find_best_route(self, start_pos, dest_pos):
             
             if ii < start_y or ii > end_y or jj < start_x or jj > end_x:
                 continue
-            if self.board[ii][jj] == ECell.AreaWall:
+            if self.board[ii][jj] == ECell.AreaWall and self.agent_state != 'suicide' and (ii, jj) != self.target_pos:
                 continue
             if (ii, jj) == self.agent_prev_pos:
                 continue
@@ -274,7 +300,7 @@ def choose_best_attack_route(self, routes):
     
     wall_breaker_rem_time = self.agent.wall_breaker_rem_time+1
     if self.agent.wall_breaker_cooldown == 0:
-        wall_breaker_rem_time = 6
+        wall_breaker_rem_time = 7
 
     correct_routes = [route for route in routes if len(route) <= wall_breaker_rem_time]
     routes = correct_routes
@@ -291,18 +317,18 @@ def choose_best_attack_route(self, routes):
             elif self.board[wall_y][wall_x] == my_wall:
                 my_walls += 1
 
-        change_percentage = -(opponent_walls*12/100) + (my_walls*40/100)
+        change_percentage = (opponent_walls*40/100) - (my_walls*30/100)
 
         last_pos = route[len(route)-1]
 
-        range_y = [last_pos[0]-3, last_pos[0]+3]
+        range_y = [last_pos[0]-2, last_pos[0]+2]
         if range_y[0] < 1:
             range_y[0] = 1
         elif range_y[1] > len(self.board)-2:
             range_y[1] = len(self.board)-2
         y_range = range(range_y[0], range_y[1]+1)
 
-        range_x = [last_pos[1]-3, last_pos[1]+3]
+        range_x = [last_pos[1]-2, last_pos[1]+2]
         if range_x[0] < 1:
             range_x[0] = 1
         elif range_x[1] > len(self.board[0])-2:
@@ -319,31 +345,31 @@ def choose_best_attack_route(self, routes):
                 elif self.board[i][j] == opponent_wall:
                     opponent_walls += 1
 
-        change_ratio = (empty_walls * -0.5) + (my_walls * 7) + (opponent_walls * 3)
+        change_ratio = (empty_walls * 5) + (my_walls * -3) + (opponent_walls * -2)
         change_percentage += (change_ratio/100)
 
-        weight = 250
+        weight = 100
         weight += weight*(change_percentage)
 
         routes_weights.append(weight)
 
+
     for i in range(len(routes)):
-        print(f'{routes[i]}  ||  {routes_weights[i]}')
+        self.log_string += f'{routes[i]}  ||  {routes_weights[i]}\n'
 
 
-    min_weight = min(routes_weights)
-    min_weight_count = routes_weights.count(min_weight)
-    if min_weight_count == 1:
-        index = routes_weights.index(min_weight)
+    max_weight = max(routes_weights)
+    max_weight_count = routes_weights.count(max_weight)
+    if max_weight_count == 1:
+        index = routes_weights.index(max_weight)
     else:
         min_weight_routes = []
         start = 0
-        for i in range(min_weight_count):
-            index = routes_weights[start:].index(min_weight)
+        for i in range(max_weight_count):
+            index = routes_weights[start:].index(max_weight)
             min_weight_routes.append(routes[index])
 
-            start = index
-            start += 1
+            start = index + 1
         
         len_of_routes = [len(route) for route in min_weight_routes]
         max_len = max(len_of_routes)
@@ -356,7 +382,7 @@ def choose_best_attack_route(self, routes):
     return routes[index]
 
 def set_next_route(self):
-    if self.agent_state != 'attack' or (self.agent_state == 'attack' and self.agent_attack_state == 'onway'):
+    if (self.agent_state != 'attack') or (self.agent_state == 'attack' and self.agent_attack_state == 'onway'):
         agent_pos = (self.agent.position.y, self.agent.position.x)
         best_route = self.find_best_route(agent_pos, self.target_pos)
 
@@ -366,10 +392,16 @@ def set_next_route(self):
         if self.reaching_path_index == -1:
             routes = self.find_attack_routes(self.target_pos)
             best_route = self.choose_best_attack_route(routes)
-            print('best_route: ', best_route)
+
+
+            self.log_string += f'best_route: {best_route}\n'
+
             
             last_pos = best_route[len(best_route)-1]
             self.target_pos = last_pos
+            self.target_passed_cycles = 10
+            self.target_wall_type = self.get_wall_type(self.target_pos)
 
             self.reaching_path = best_route
             self.reaching_path_index = 0
+            

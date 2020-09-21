@@ -8,7 +8,7 @@ def set_walls(self):
     self.walls['side_area'] = []
     self.walls['mid_area'] = []
 
-def set_requirements(self, agents, names, scores, board, curr_cycle):
+def set_requirements(self, agents, names, scores, board, curr_cycle, crash_score):
     self.agent = agents[names[0]]
     self.opponent = agents[names[1]]
 
@@ -20,35 +20,62 @@ def set_requirements(self, agents, names, scores, board, curr_cycle):
     self.board = board
 
     self.curr_cycle = curr_cycle
+    self.area_wall_crash_score = crash_score
 
 def find_walls_neighbors(self):
     wall_positions = list(self.walls['empty'].keys())
-    for position in wall_positions:
-        wall_y, wall_x = position[0], position[1]
+    for wall_pos in wall_positions:
+        wall_y, wall_x = wall_pos[0], wall_pos[1]
 
-        range_y1 = wall_y-5
-        range_y2 = wall_y+5
+        self.walls_neighbors[(wall_y, wall_x)] = {}
+        val = 1
+        while val < 6:
+            neighbors = []
+            pos_1 = (wall_pos[0]-val, wall_pos[1]-val)
+            pos_2 = (wall_pos[0]+val, wall_pos[1]+val)
 
-        
-        if range_y1 < 1:
-            range_y1 = 1
-        elif range_y2 > len(self.board)-2:
-            range_y2 = len(self.board)-2
+            check_points = [
+                    (pos_1[0], pos_1[1]),
+                    (pos_1[0], pos_2[1]),
+                    (pos_2[0], pos_2[1]),
+                    (pos_2[0], pos_1[1]),
+                    (pos_1[0], pos_1[1])
+            ]
 
-        range_x1 = wall_x-8
-        range_x2 = wall_x+8
-        if range_x1 < 1:
-            range_x1 = 1
-        elif range_x2 > len(self.board[0])-2:
-            range_x2 = len(self.board[0])-2
+            itr = 1
+            i = check_points[0][0]
+            j = check_points[0][1]
 
-
-        self.walls_neighbors[(wall_y, wall_x)] = []
-        for i in range(range_y1, range_y2+1):
-            for j in range(range_x1, range_x2+1):
+            if (i < 1 or i > len(self.board)-2 or j < 1 or j > len(self.board[0])) == False:
                 if self.board[i][j] != ECell.AreaWall:
-                    if (i, j) != position:
-                        self.walls_neighbors[(wall_y, wall_x)].append((i, j))
+                    neighbors.append((i, j))
+
+            i_steps = (0, 1, 0, -1)
+            j_steps = (1, 0, -1, 0)
+            l = 0
+            while itr <= 4:
+                i += i_steps[l]
+                j += j_steps[l]
+
+                wall_valid = True
+                if i < 1 or i > len(self.board)-2 or j < 1 or j > len(self.board[0])-2:
+                    wall_valid = False
+
+                if wall_valid:
+                    if self.board[i][j] != ECell.AreaWall:
+                        if(i, j) not in neighbors and (i, j) != wall_pos:
+                            neighbors.append((i, j))
+
+                if (i, j) == check_points[itr]:
+                    i = check_points[itr][0]
+                    j = check_points[itr][1]
+
+                    itr += 1
+                    l += 1
+                    continue
+
+            self.walls_neighbors[(wall_y, wall_x)][val] = neighbors
+            val += 1
 
 def find_closest_area_wall(self):
     area_walls_pos = self.walls['mid_area'] + self.walls['side_area']
@@ -71,4 +98,4 @@ def find_closest_area_wall(self):
             index = distances.index(min_distance)
             closest_awall_pos = area_walls_pos[index]
 
-            self.walls_closest_awalls[wall_pos] = closest_awall_pos
+            self.walls_closest_awall[wall_pos] = closest_awall_pos
