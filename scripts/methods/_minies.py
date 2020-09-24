@@ -3,7 +3,8 @@ from math import sqrt
 
 def is_attack_target_increased(self):
     prev_distance = self.attack_target_init_dist
-    curr_distance = self.walls[self.get_wall_type(self.target_pos)][self.target_pos]['agent_d']
+
+    curr_distance = self.get_distance(self.agent_pos, self.target_pos)
 
     if prev_distance < curr_distance:
         self.attack_target_init_dist = curr_distance
@@ -21,15 +22,17 @@ def is_target_wall_type_changed(self):
         return False
 
 def is_target_cycles_exceeded(self):
-    self.target_passed_cycles -= 1
-    if self.target_passed_cycles <= 0:
-        return True
-    else:
+    if self.agent_state == 'attack' and self.agent_attack_state == 'attacking':
         return False
+    else:
+        self.target_passed_cycles -= 1
+        if self.target_passed_cycles <= 0 :
+            return True
+        else:
+            return False
 
 def is_target_reached(self):
-    agent_pos = (self.agent.position.y, self.agent.position.x)
-    if agent_pos == self.target_pos:
+    if self.agent_pos == self.target_pos:
         return True
     else:
         return False
@@ -43,14 +46,12 @@ def is_wallbreaker_needed(self):
         return False
 
 def is_enough_opp_wall_around_us(self):
-    agent_pos = (self.agent.position.y, self.agent.position.x)
-
-    range_y = [agent_pos[0]-10, agent_pos[0]+10]
+    range_y = [self.agent_pos[0]-6, self.agent_pos[0]+6]
     range_y[0] = 1 if range_y[0] < 1 else range_y[0]
     range_y[1] = len(self.board)-2 if range_y[1] > len(self.board)-2 else range_y[1]
     y_range = range(range_y[0], range_y[1]+1)
 
-    range_x = [agent_pos[1]-6, agent_pos[1]+6]
+    range_x = [self.agent_pos[1]-8, self.agent_pos[1]+8]
     range_x[0] = 1 if range_x[0] < 1 else range_x[0]
     range_x[1] = len(self.board[0])-2 if range_x[1] > len(self.board[0])-2 else range_x[1]
     x_range = range(range_x[0], range_x[1]+1)
@@ -70,36 +71,11 @@ def is_enough_opp_wall_around_us(self):
     else:
         return False
 
-def is_agent_around_dense(self):
-    agent_pos = (self.agent.position.y, self.agent.position.x)
+def is_attack_target_got_unreachable(self):
+    self.log_string += f' target got unreachable\n'
+    route_weight = self.find_route_weight(self.best_attack_target_path[1:])
 
-    range_y = [agent_pos[0]-7, agent_pos[0]+7]
-    range_x = [agent_pos[1]-7, agent_pos[1]+7]
-
-    range_y[0] = 1 if range_y[0] < 1 else range_y[0]
-    range_y[1] = len(self.board)-2 if range_y[1] > len(self.board)-2 else range_y[1]
-    range_x[0] = 1 if range_x[0] < 1 else range_x[0]
-    range_x[1] = len(self.board[0])-2 if range_x[1] > len(self.board[0])-2 else range_x[1]
-    
-    range_y = range(range_y[0], range_y[1]+1)
-    range_x = range(range_x[0], range_x[1]+1)
-    
-    empty_walls = opponent_walls = my_walls = area_walls = 0
-    for i in range_y:
-        for j in range_x:
-            wall_type = self.get_wall_type((i, j))
-            if wall_type == 'my':
-                my_walls += 1
-            elif wall_type == 'opponent':
-                opponent_walls += 1
-            elif wall_type == 'empty':
-                empty_walls += 1
-            elif wall_type == 'mid_area':
-                area_walls += 1
-
-    density = opponent_walls + my_walls - empty_walls
-    self.log_string += f'density: {density}\n'
-    if density > 20:
+    if route_weight != 100:
         return True
     else:
         return False
